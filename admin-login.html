@@ -1,0 +1,6 @@
+<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin - RUMAH UMKM</title><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet"><link rel="stylesheet" href="../css/style.css"></head><body data-page="adminlogin"><main id="app"><section class="wrap auth"><h1>Admin Login</h1><form id="lf" class="form"><input name="email" type="email" required placeholder="Email"><input name="password" type="password" required placeholder="Password"><button class="btn">Login</button></form></section></main><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="../js/config.js"></script><script src="../js/app.js"></script><script>
+$('#lf').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);
+const{error}=await sb.auth.signInWithPassword({email:f.get('email'),password:f.get('password')});
+if(error)return toast('Email atau password salah.',1);
+const p=await getProfile();if(p&&p.role==='admin')location='./admin.html';else{await sb.auth.signOut();toast('Access denied.',1)}};
+</script></body></html>

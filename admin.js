@@ -1,0 +1,39 @@
+function modal(h){const m=document.createElement('div');m.className='modal';m.innerHTML=`<div class="mb">${h}</div>`;document.body.append(m);m.querySelectorAll('[data-x]').forEach(x=>x.onclick=()=>m.remove());return m}
+async function pform(p={}){const{data:cs}=await sb.from('categories').select('name').order('name');
+ const m=modal(`<h3>${p.id?'Edit':'Tambah'} Produk</h3><form class="form"><input name="name" required placeholder="Product Name" value="${esc(p.name)}"><textarea name="description" placeholder="Description">${esc(p.description)}</textarea><input name="price" type="number" min="0" required placeholder="Price" value="${p.price??''}"><input name="stock" type="number" min="0" required placeholder="Stock" value="${p.stock??''}"><select name="category">${(cs||[]).map(c=>`<option ${c.name===p.category?'selected':''}>${esc(c.name)}</option>`).join('')}</select>${p.image_url?`<img class="th" src="${esc(p.image_url)}">`:''}<input type="file" name="file" accept="image/*"><input name="image_url" placeholder="atau URL gambar" value="${esc(p.image_url)}"><label><input type="checkbox" name="is_active" ${p.is_active===false?'':'checked'}> Aktif</label><div class="btns"><button type="button" class="btn o" data-x>Cancel</button><button class="btn">Simpan</button></div></form>`);
+ m.querySelector('form').onsubmit=async e=>{e.preventDefault();const f=e.target,fd=new FormData(f);let url=fd.get('image_url')||null;const file=fd.get('file');
+  try{if(file&&file.size){const path=Date.now()+'-'+file.name.replace(/[^\w.]/g,'_');const u=await sb.storage.from('product-images').upload(path,file);if(u.error)throw u.error;url=sb.storage.from('product-images').getPublicUrl(path).data.publicUrl}
+   const row={name:fd.get('name'),description:fd.get('description'),price:+fd.get('price'),stock:+fd.get('stock'),category:fd.get('category'),image_url:url,is_active:f.is_active.checked,updated_at:new Date().toISOString()};
+   const r=p.id?await sb.from('products').update(row).eq('id',p.id):await sb.from('products').insert(row);if(r.error)throw r.error;
+   m.remove();toast(p.id?'Produk berhasil diperbarui.':'Produk berhasil ditambahkan.');T.products()}
+  catch(x){toast(p.id?'Gagal memperbarui produk.':'Gagal menambahkan produk.',1)}}}
+const tbl=(h,rows)=>`<div class="tw"><table><tr>${h.map(x=>`<th>${x}`).join('')}</tr>${rows}</table></div>`;
+const T={
+async dashboard(){const[a,b,c,d]=await Promise.all([sb.from('products').select('id',{count:'exact',head:true}),sb.from('orders').select('id',{count:'exact',head:true}),sb.from('profiles').select('id',{count:'exact',head:true}).eq('role','customer'),sb.from('orders').select('total_price').neq('status','cancelled')]);
+ if(a.error||d.error)return fail();const rev=(d.data||[]).reduce((s,o)=>s+ +o.total_price,0);
+ root.innerHTML=`<h1>Dashboard</h1><div class="stats">${[['Total Products',a.count],['Total Orders',b.count],['Total Customers',c.count],['Total Revenue',rp(rev)]].map(([k,v])=>`<div class="card cb"><small>${k}</small><h2>${v??0}</h2></div>`).join('')}</div>`},
+async products(){const{data,error}=await sb.from('products').select('*').order('created_at',{ascending:false});if(error)return fail();
+ root.innerHTML=`<h1>Products</h1><button class="btn" id="np">+ Add Product</button>`+tbl(['Image','Product Name','Category','Price','Stock','Status','Created Date','Action'],data.map(p=>`<tr><td><img class="th" src="${esc(p.image_url||IMG)}"><td>${esc(p.name)}<td>${esc(p.category)}<td>${rp(p.price)}<td>${p.stock}<td>${p.is_active?'Aktif':'Nonaktif'}<td>${new Date(p.created_at).toLocaleDateString('id-ID')}<td><button class="btn o" data-e="${p.id}">Edit</button> <button class="btn o" data-d="${p.id}">Delete</button></tr>`).join(''));
+ $('#np').onclick=()=>pform();
+ root.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>pform(data.find(x=>x.id===b.dataset.e)));
+ root.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const m=modal(`<h3>Apakah Anda yakin ingin menghapus produk ini?</h3><div class="btns"><button class="btn o" data-x>Cancel</button><button class="btn" id="ok">Delete</button></div>`);
+  $('#ok').onclick=async()=>{const{error}=await sb.from('products').update({is_active:false,updated_at:new Date().toISOString()}).eq('id',b.dataset.d);m.remove();error?toast('Gagal menghapus produk.',1):(toast('Produk dinonaktifkan.'),T.products())}})},
+async categories(){const{data,error}=await sb.from('categories').select('*').order('name');if(error)return fail();
+ root.innerHTML=`<h1>Categories</h1><form id="cf" class="row"><input name="name" required placeholder="Nama kategori"><input name="description" placeholder="Deskripsi"><button class="btn">+ Tambah</button></form>`+tbl(['Nama','Deskripsi','Action'],data.map(c=>`<tr><td>${esc(c.name)}<td>${esc(c.description)}<td><button class="btn o" data-e="${c.id}">Edit</button> <button class="btn o" data-d="${c.id}">Delete</button></tr>`).join(''));
+ $('#cf').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target);const{error}=await sb.from('categories').insert({name:fd.get('name'),description:fd.get('description')});error?toast('Gagal menambah kategori.',1):T.categories()};
+ root.querySelectorAll('[data-e]').forEach(b=>b.onclick=async()=>{const c=data.find(x=>x.id===b.dataset.e),n=prompt('Nama kategori',c.name);if(!n)return;const{error}=await sb.from('categories').update({name:n}).eq('id',c.id);error?toast('Gagal mengubah kategori.',1):T.categories()});
+ root.querySelectorAll('[data-d]').forEach(b=>b.onclick=async()=>{if(!confirm('Hapus kategori ini?'))return;const{error}=await sb.from('categories').delete().eq('id',b.dataset.d);error?toast('Gagal menghapus kategori.',1):T.categories()})},
+async orders(){const{data,error}=await sb.from('orders').select('*,profiles(full_name,email)').order('created_at',{ascending:false});if(error)return fail();
+ const S=['pending','processing','shipped','completed','cancelled'];
+ root.innerHTML=`<h1>Orders</h1>`+tbl(['Order ID','Customer','Tanggal','Total','Payment','Status'],data.map(o=>`<tr><td>${o.id.slice(0,8)}<td>${esc(o.profiles?.full_name||o.profiles?.email)}<td>${new Date(o.created_at).toLocaleDateString('id-ID')}<td>${rp(o.total_price)}<td>${esc(o.payment_method)}<td><select data-o="${o.id}">${S.map(s=>`<option ${s===o.status?'selected':''}>${s}</option>`).join('')}</select></tr>`).join(''));
+ root.querySelectorAll('[data-o]').forEach(s=>s.onchange=async()=>{const{error}=await sb.from('orders').update({status:s.value,updated_at:new Date().toISOString()}).eq('id',s.dataset.o);error?toast('Gagal mengubah status.',1):toast('Status diperbarui.')})},
+async customers(){const[p,o]=await Promise.all([sb.from('profiles').select('*').eq('role','customer').order('created_at',{ascending:false}),sb.from('orders').select('user_id')]);if(p.error||o.error)return fail();
+ const n={};o.data.forEach(x=>n[x.user_id]=(n[x.user_id]||0)+1);
+ root.innerHTML=`<h1>Customers</h1>`+tbl(['Nama','Email','Telepon','Tanggal Daftar','Jumlah Pesanan'],p.data.map(c=>`<tr><td>${esc(c.full_name)}<td>${esc(c.email)}<td>${esc(c.phone)}<td>${new Date(c.created_at).toLocaleDateString('id-ID')}<td>${n[c.id]||0}</tr>`).join(''))},
+settings(){root.innerHTML='<h1>Settings</h1><p>Untuk menambah admin, ubah kolom <code>role</code> di tabel <code>profiles</code> (lihat README).</p>'}};
+(async()=>{const p=await getProfile();
+ if(!p||p.role!=='admin'){document.body.innerHTML='<p class="msg">Access denied.</p><p class="msg"><a href="./admin-login.html">Login admin</a></p>';return}
+ $('#lo').onclick=async e=>{e.preventDefault();await sb.auth.signOut();location='./admin-login.html'};
+ $('#sb').onclick=()=>$('.side').classList.toggle('open');
+ const go=()=>{const t=location.hash.slice(1)||'dashboard';document.querySelectorAll('.side a[data-t]').forEach(a=>a.classList.toggle('on',a.dataset.t===t));root.innerHTML='<p class="msg">Memuat...</p>';(T[t]||T.dashboard)().catch(fail)};
+ addEventListener('hashchange',go);go()})();
